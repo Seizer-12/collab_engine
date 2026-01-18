@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]  # Needed for WebSocket support
+websockets
+redis
+sqlalchemy
+pydantic-settings

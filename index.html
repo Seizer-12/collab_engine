@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Real-Time Collab Engine</title>
+		<style>
+			body {
+				font-family: "Segoe UI", sans-serif;
+				background: #f4f7f6;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				padding: 20px;
+			}
+			#editor-container {
+				background: white;
+				width: 80%;
+				max-width: 800px;
+				padding: 20px;
+				border-radius: 8px;
+				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+			}
+			h2 {
+				color: #333;
+			}
+			textarea {
+				width: 100%;
+				height: 300px;
+				border: 1px solid #ddd;
+				border-radius: 4px;
+				padding: 10px;
+				font-size: 16px;
+				outline: none;
+				transition: border 0.3s;
+			}
+			textarea:focus {
+				border-color: #4caf50;
+			}
+			#status-bar {
+				display: flex;
+				justify-content: space-between;
+				margin-top: 10px;
+				font-size: 14px;
+				color: #666;
+			}
+			.user-tag {
+				background: #e0e0e0;
+				padding: 2px 8px;
+				border-radius: 12px;
+				margin-left: 5px;
+			}
+		</style>
+	</head>
+	<body>
+		<div
+			id="login-overlay"
+			style="
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: rgba(0, 0, 0, 0.8);
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				z-index: 1000;
+			"
+		>
+			<div
+				style="
+					background: white;
+					padding: 30px;
+					border-radius: 8px;
+					text-align: center;
+				"
+			>
+				<h3>Enter your Username</h3>
+				<input
+					type="text"
+					id="username-input"
+					placeholder="e.g. Alex_Dev"
+					style="
+						padding: 10px;
+						width: 200px;
+						margin-bottom: 10px;
+						border: 1px solid #ccc;
+						border-radius: 4px;
+					"
+				/><br />
+				<button
+					onclick="joinRoom()"
+					style="
+						padding: 10px 20px;
+						background: #4caf50;
+						color: white;
+						border: none;
+						border-radius: 4px;
+						cursor: pointer;
+					"
+				>
+					Join Document
+				</button>
+			</div>
+		</div>
+
+		<h2>Collab Engine: Document #1</h2>
+
+		<div id="editor-container">
+			<textarea id="editor" placeholder="Start typing..."></textarea>
+			<div id="status-bar">
+				<div id="connection-status">Disconnected</div>
+				<div id="active-users">Users:</div>
+			</div>
+		</div>
+
+		<div id="status-bar">
+			<div id="connection-status">Disconnected</div>
+			<div id="last-editor">Last edit by: ---</div>
+			<div id="active-users">Users:</div>
+		</div>
+
+		<script>
+			const docId = 1;
+			const editor = document.getElementById("editor");
+			const status = document.getElementById("connection-status");
+			let socket; // Global socket variable
+			let userId;
+			let activeUsers = new Set();
+
+			// NEW: Function to initialize everything
+			function joinRoom() {
+				const input = document.getElementById("username-input");
+				userId = input.value.trim();
+
+				if (!userId) {
+					alert("Please enter a username!");
+					return;
+				}
+
+				// Hide the login overlay
+				document.getElementById("login-overlay").style.display = "none";
+
+				// 2. Establish WebSocket Connection with the CUSTOM username
+				socket = new WebSocket(
+					`ws://localhost:8000/ws/${docId}/${userId}`
+				);
+
+				// 3. Handle Messages (The logic remains the same)
+				socket.onmessage = (event) => {
+					const data = JSON.parse(event.data);
+					if (data.type === "INITIAL_STATE") {
+						editor.value = data.content;
+						status.innerText = `Connected as ${userId}`;
+						activeUsers.add(userId);
+						updateUsersUI();
+					} else if (data.type === "EDIT") {
+                        // 1. Update the editor content (if from someone else)
+                        if (data.user_id !== userId) { 
+                            editor.value = data.content; 
+                        }
+                    
+                        // 2. NEW: Update the "Last Edited By" label for EVERYONE
+                        const lastEditorLabel = document.getElementById('last-editor');
+                        lastEditorLabel.innerText = `Last edit by: ${data.user_id}`;
+                        
+                        // Optional: Add a little highlight effect
+                        lastEditorLabel.style.color = "#4CAF50"; 
+                        setTimeout(() => { lastEditorLabel.style.color = "#666"; }, 1000);
+					} else if (data.type === "USER_JOINED") {
+						activeUsers.add(data.user_id);
+						updateUsersUI();
+					} else if (data.type === "USER_LEFT") {
+						activeUsers.delete(data.user_id);
+						updateUsersUI();
+					}
+				};
+
+				// 4. Handle Typing
+				editor.addEventListener("input", () => {
+					const message = {
+						type: "EDIT",
+						user_id: userId,
+						content: editor.value,
+					};
+					socket.send(JSON.stringify(message));
+				});
+
+				socket.onclose = () => {
+					status.innerText = "Disconnected";
+				};
+			}
+
+			function updateUsersUI() {
+				const userContainer = document.getElementById("active-users");
+				userContainer.innerHTML =
+					"Users: " +
+					Array.from(activeUsers)
+						.map((user) => `<span class="user-tag">${user}</span>`)
+						.join("");
+			}
+		</script>
+	</body>
+</html>
