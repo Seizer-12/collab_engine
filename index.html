@@ -177,15 +177,23 @@
 					}
 				};
 
-				// 4. Handle Typing
-				editor.addEventListener("input", () => {
-					const message = {
-						type: "EDIT",
-						user_id: userId,
-						content: editor.value,
-					};
-					socket.send(JSON.stringify(message));
-				});
+				let timeout = null;
+
+                editor.addEventListener('input', () => {
+                    // 1. Clear the timer every time a key is pressed
+                    clearTimeout(timeout);
+
+                    // 2. Start a new timer for 500ms
+                    timeout = setTimeout(() => {
+                        const message = {
+                            type: "EDIT",
+                            user_id: userId,
+                            content: editor.value
+                        };
+                        socket.send(JSON.stringify(message));
+                        console.log("DB Saved (Debounced)");
+                    }, 500); 
+                });
 
 				socket.onclose = () => {
 					status.innerText = "Disconnected";
